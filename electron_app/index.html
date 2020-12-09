@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>pm2控制台</title>
+    <!-- <link rel="import" href='./webComponent/serveTemplate.html'> -->
+    <!-- <link rel="import" href='./webComponent/addServeTemplate.html'> -->
+    <!-- <link rel="import" href='./webComponent/maskTemplate.html'> -->
+    <link rel='stylesheet'  href="./index.css">
+    <script src="./webComponent/component.js"></script>
+  </head>
+  <body>
+    <template id='add-serve'>
+      <style>
+        :host {
+          display: inline-block;
+          width: 200px;
+          font-size: 16px;
+        }
+        p {
+          margin: 3px ;
+        }
+        .button {
+          margin: 10px;
+        }
+      </style>
+      <p>IP:</p>
+      <input name="ip"/>
+      <input class='button' type="button" value="连接">
+    </template>
+    <template id='pm2-serve'>
+      <style>
+        :host {
+          display: inline-block;
+          width: 200px;
+          height: 12+0px;
+          background-color: #d4d4d4;
+          border: 1px solid #d5d5d5;
+          box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.1);
+          border-radius: 3px;
+          overflow: hidden;
+          padding: 10px;
+          box-sizing: border-box;
+          font-size: 16px;
+          margin: 10px;
+        }
+      </style>
+      <p> serveIP: <slot name='ip'></slot></p>
+      <input type="button" value='连接' class="linkServe" />
+    </template>
+    <template id='global-mask'>
+      <style>
+        :host {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: #cccccc66;
+          text-align: center;
+          display: flex;
+          align-items:center;
+          justify-content:center;
+        }
+        .centerInfo {
+          display: inline-block;
+          background-color: white;
+          padding: 5px;
+          border-radius: 3px;
+        }
+      </style>
+      <div class="centerInfo">
+        <slot name='childNode'></slot>
+      </div>
+    </template>
+
+    
+    <h1><span style="color: blue;">PM2</span> 控制台</h1>
+    <div class="dash"></div>
+    <div id='main'>
+      <div>
+        <input style='float: right;' onclick="addServe()" type="button" value="新增"/>
+        <h3>服务器列表</h3>
+      </div>
+      <div id='serveList'>
+        <pm2-serve>
+          <span slot="ip" style="color: red;">127.0.0.1</span>
+        </pm2-serve>
+      </div>
+    </div>
+    <div id='console' style="display: none;">
+      <div>
+        <input style='float: right;' onclick="backServe()" type="button" value="返回"/>
+        <h3>服务器IP: <span id='serveIP'></span></h3>
+      </div>
+      <div id='pm2list'>
+        <table style="text-align: center;" border="1px black soild" id='pm2Table'>          
+        </table>
+      </div>
+    </div>
+    </div>
+    <global-mask id='edit' style="visibility: hidden;">
+      <add-serve slot='childNode'></add-serve>
+    </global-mask>
+  </body>
+  <script>
+    const login = (ip) => {
+      fetch(`http://${ip}:20210/login`,{method: 'PUT'}).then(
+        async data => {
+          const result = await data.json()
+          if(!result.success) return alert(result.data)
+          
+          document.getElementById('main').style.display = 'none'
+          document.getElementById('console').style.display = 'block'
+          document.getElementById('serveIP').innerHTML = ip
+          list(ip)
+        }
+      ).catch(err => {
+        console.log(err)
+        alert('服务器连接失败')
+      })
+    }
+    const list = (ip) => {
+      fetch(`http://${ip}:20210/list`,{method: 'PUT'}).then(
+        async data => {
+          const result = await data.json()
+          if(!result.success) return alert(result.msg || '获取列表失败')
+          createTable(result.data)
+        }
+      )
+    }
+    const testlink = (ip, cb) => {
+      fetch(`http://${ip}:20210/ping`,{method: 'PUT'}).then(
+        async data => {
+          const resultValue = await data.text()
+          if (resultValue === 'pong') {
+
+            const childP = document.createElement('span')
+            childP.innerHTML=ip
+            childP.setAttribute('slot', 'ip')
+            childP.setAttribute('style', 'color: red;')
+            
+            const tempElement =  customElements.get('pm2-serve'); 
+            const content = new tempElement()
+            content.appendChild(childP)
+            document.getElementById('serveList').appendChild(content);
+            
+            closeServeAdd()
+            cb()
+            return 
+          }
+          alert('连接失败')
+        }
+      ).catch(err => {
+        console.log(err)
+        alert('连接失败')
+      })
+    }
+    const addServe = () => {
+      document.getElementById('edit').style.visibility = 'visible'
+    }
+    const closeServeAdd = () => {
+      document.getElementById('edit').style.visibility = 'hidden'
+    }
+    const backServe = () => {
+      document.getElementById('main').style.display = 'block'
+      document.getElementById('console').style.display = 'none'
+      document.getElementById('serveIP').innerHTML = ''
+    }
+    const createTable = (list) => {
+      const table = document.getElementById('pm2Table')
+      while(table.hasChildNodes()){
+        table.removeChild(table.firstChild)
+      }
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <tr>
+          <th>type</th>
+          <th>App name</th>
+          <th>id</th>
+          <th>version</th>
+          <th>mode</th>
+          <th>pid</th>
+          <th>status</th>
+          <th>restart</th>
+          <th>cpu</th>
+          <th>mem</th>
+          <th>操作</>
+        </tr>
+      `;
+      table.appendChild(tr)
+
+      for (let i = 0; i < list.length; i++) {
+        const { monit, pm2_env, name, pid, pm_id } = list[i]
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <tr>
+            <td>${pm2_env.pmx_module ? 'Module' : 'App'}</td>
+            <td>${name}</td>
+            <td>${pm_id}</td>
+            <td>${pm2_env.version}</td>
+            <td>${pm2_env.exec_mode}</td>
+            <td>${pid}</td>
+            <td>${pm2_env.status}</td>
+            <td>${pm2_env.restart_time}</td>
+            <td>${monit.cpu}</td>
+            <td>${computeMem(monit.memory)}</td>
+            <td>
+              <a onclick='stop("${name}")'>停止</a>
+              <a onclick='start("${name}")'>开启</a>
+              <a onclick='restart("${name}")'>重启</a>
+              <a onclick='del("${name}")'>删除</a>
+            </td>
+          </tr>
+        `;
+        table.appendChild(tr)
+      }
+    }
+    const stop = (name) => {
+      postCli('stop', name)
+    }
+    const start = (name) => {
+      postCli('start', name)
+    }
+    const restart = (name) => {
+      postCli('restart', name)
+    }
+    const del = (name) => {
+      postCli('del', name)
+    }
+    const postCli = (method, name) => {      
+      fetch(`http://${document.getElementById('serveIP').innerHTML}:20210/${method}`,{
+        method: 'PUT', 
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'}, 
+        body: `name=${name}`
+      }).then(
+        async data => {
+          const result = await data.json()
+          if(!result.success) return alert(result.msg || '操作失败')
+          list(document.getElementById('serveIP').innerHTML)
+        }
+      )
+    }
+    const computeMem = (mem) => {
+      const lvl = ['B', 'KB','MB', 'GB']
+      let lvlCount = 0
+      while(mem > 1024) {
+        mem /= 1024
+        lvlCount++
+      }
+      
+      return mem.toFixed(1) + lvl[lvlCount]
+    }
+
+  </script>
+</html>

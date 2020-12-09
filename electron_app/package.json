@@ -1,0 +1,12 @@
+{
+  "name": "pm2_app",
+  "version": "0.1.0",
+  "description": "",
+  "main": "main",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "electron-packager . --electron-version=11.0.3 pm2Console --out ./OutApp --overwrite"
+  },
+  "author": "",
+  "license": "MIT"
+}
